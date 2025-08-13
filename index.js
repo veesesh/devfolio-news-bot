@@ -7,6 +7,7 @@ const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const SOURCE_CHANNEL_A = process.env.SOURCE_CHANNEL_A;
 const SOURCE_CHANNEL_B = process.env.SOURCE_CHANNEL_B;
+const SOURCE_CHANNEL_C = process.env.SOURCE_CHANNEL_C;
 
 // Validate environment variables
 [
@@ -15,6 +16,7 @@ const SOURCE_CHANNEL_B = process.env.SOURCE_CHANNEL_B;
     ["SLACK_CHANNEL_ID", SLACK_CHANNEL_ID],
     ["SOURCE_CHANNEL_A", SOURCE_CHANNEL_A],
     ["SOURCE_CHANNEL_B", SOURCE_CHANNEL_B],
+    ["SOURCE_CHANNEL_C", SOURCE_CHANNEL_C],
 ].forEach(([name, value]) => {
     if (!value) {
         console.error(`❌ ${name} is not set in environment variables`);
@@ -53,8 +55,10 @@ You are the editor of "Devfolio News" — a weekly broadcast to share Devfolio's
 - Do NOT repeat the same link twice.
 
 🏡 In-House Updates:
-- Summarize internal Devfolio updates, product changes, or announcements or EDC updates from the provided Slack messages from the general channel.
+- Summarize internal Devfolio updates, product changes, or announcements or EDC updates from the provided Slack messages from source_channel_C (social media channel).
 - Each update: 1–2 sentences.
+- add links found in the message or embeddings of the link. 
+- format: single line - relevant link
 - If none found, leave section blank.
 
 🌐 Good Read:
@@ -76,6 +80,7 @@ End the newsletter with sentence "Never stop building!"
 📌 Rules:
 - Use the provided Slack messages as your primary source, but separate them by channel purpose.
 - Source_channel_A (reading channel) content is ONLY for the "Good Read" section.
+- Source_channel_C (social media channel) content is ONLY for the "In-House Updates" section.
 - All other sections should use content from the general channel or generate fresh content if needed.
 - If some sections are missing info, supplement with relevant, recent public info (last 7 days).
 - Make sure to pull out the actual link related to the respective news from the context. 
@@ -157,14 +162,16 @@ function extractMessageContent(messages) {
 }
 
 // Get separate context from channels with specific purposes
-async function getContextFromChannels(channelAId, channelBId) {
-    const [messagesA, messagesB] = await Promise.all([
+async function getContextFromChannels(channelAId, channelBId, channelCId) {
+    const [messagesA, messagesB, messagesC] = await Promise.all([
         fetchChannelMessages(channelAId),
         fetchChannelMessages(channelBId),
+        fetchChannelMessages(channelCId),
     ]);
 
     const contentA = extractMessageContent(messagesA);
     const contentB = extractMessageContent(messagesB);
+    const contentC = extractMessageContent(messagesC);
 
     // Check if channel A (reading channel) has any content
     const hasChannelAContent = messagesA.length > 0 && contentA.trim().length > 0;
@@ -177,7 +184,9 @@ async function getContextFromChannels(channelAId, channelBId) {
         contextString += `--- SOURCE_CHANNEL_A (Reading Channel) ---\nNo messages found in the last 7 days. Generate fresh content for Good Read section.\n\n`;
     }
 
-    contextString += `--- GENERAL_CHANNEL (For All Other Sections) ---\n${contentB}`;
+    contextString += `--- GENERAL_CHANNEL (For All Other Sections) ---\n${contentB}\n\n`;
+
+    contextString += `--- SOURCE_CHANNEL_C (Social Media Channel - For In-House Updates Section Only) ---\n${contentC}`;
 
     return contextString;
 }
@@ -244,10 +253,11 @@ async function postToSlack(message) {
 (async() => {
     console.log("🤖 Starting Devfolio News Bot...");
 
-    // Step 1: Get messages from last 7 days from both source channels
+    // Step 1: Get messages from last 7 days from all three source channels
     const context = await getContextFromChannels(
         SOURCE_CHANNEL_A,
-        SOURCE_CHANNEL_B
+        SOURCE_CHANNEL_B,
+        SOURCE_CHANNEL_C
     );
 
     // Step 2: Append context to prompt
