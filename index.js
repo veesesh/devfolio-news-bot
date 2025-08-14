@@ -11,23 +11,23 @@ const SOURCE_CHANNEL_C = process.env.SOURCE_CHANNEL_C;
 
 // Validate environment variables
 [
-    ["GEMINI_API_KEY", GEMINI_API_KEY],
-    ["SLACK_BOT_TOKEN", SLACK_BOT_TOKEN],
-    ["SLACK_CHANNEL_ID", SLACK_CHANNEL_ID],
-    ["SOURCE_CHANNEL_A", SOURCE_CHANNEL_A],
-    ["SOURCE_CHANNEL_B", SOURCE_CHANNEL_B],
-    ["SOURCE_CHANNEL_C", SOURCE_CHANNEL_C],
+  ["GEMINI_API_KEY", GEMINI_API_KEY],
+  ["SLACK_BOT_TOKEN", SLACK_BOT_TOKEN],
+  ["SLACK_CHANNEL_ID", SLACK_CHANNEL_ID],
+  ["SOURCE_CHANNEL_A", SOURCE_CHANNEL_A],
+  ["SOURCE_CHANNEL_B", SOURCE_CHANNEL_B],
+  ["SOURCE_CHANNEL_C", SOURCE_CHANNEL_C],
 ].forEach(([name, value]) => {
-    if (!value) {
-        console.error(`❌ ${name} is not set in environment variables`);
-        process.exit(1);
-    }
+  if (!value) {
+    console.error(`❌ ${name} is not set in environment variables`);
+    process.exit(1);
+  }
 });
 
 const currentWeek = new Date().toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
+  month: "long",
+  day: "numeric",
+  year: "numeric",
 });
 
 // Clean, paraphrasing prompt
@@ -53,6 +53,8 @@ You are the editor of "Devfolio News" — a weekly broadcast to share Devfolio's
 - Only include links that match the news and are from credible sources.
 - Separate each story with a blank line.
 - Do NOT repeat the same link twice.
+- Include atleast 4 stories, but if there are not enough in the context, generate fresh ones.
+- Do NOT include any stories from source_channel_A or source_channel_C.
 
 🏡 In-House Updates:
 - Summarize internal Devfolio updates, product changes, or announcements or EDC updates from the provided Slack messages from source_channel_C (social media channel).
@@ -60,6 +62,7 @@ You are the editor of "Devfolio News" — a weekly broadcast to share Devfolio's
 - add links found in the message or embeddings of the link. 
 - format: single line - relevant link
 - If none found, leave section blank.
+- Do NOT include any updates from source_channel_A or source_channel_B.
 
 🌐 Good Read:
 - ONLY use content from the source_channel_A (reading channel) for this section.
@@ -67,6 +70,7 @@ You are the editor of "Devfolio News" — a weekly broadcast to share Devfolio's
 - If source_channel_A has no recent messages, generate fresh recommendations for interesting tech-related articles, blog posts, or videos from the last week.
 - Include a short hook before each link.
 - Do NOT use source_channel_A content in any other section.
+- Do NOT include any updates from source_channel_C or source_channel_B.
 
 💡 Fun Fact:
 - Share one short, quirky, verified fact (preferably science/tech-related).
@@ -97,183 +101,187 @@ Here's the recent Slack context:
 
 // Helper to clean Slack formatting
 function cleanSlackFormatting(text) {
-    if (!text) return "";
-    return text
-        .replace(/<([^|>]+)\|([^>]+)>/g, "$2 ($1)")
-        .replace(/<([^>]+)>/g, "$1");
+  if (!text) return "";
+  return text
+    .replace(/<([^|>]+)\|([^>]+)>/g, "$2 ($1)")
+    .replace(/<([^>]+)>/g, "$1");
 }
 
 // Fetch messages from last 7 days from a Slack channel
 async function fetchChannelMessages(channelId) {
-    try {
-        // Calculate timestamp for 7 days ago
-        const sevenDaysAgo = Math.floor(
-            (Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000
-        );
+  try {
+    // Calculate timestamp for 7 days ago
+    const sevenDaysAgo = Math.floor(
+      (Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000
+    );
 
-        const res = await axios.get("https://slack.com/api/conversations.history", {
-            params: {
-                channel: channelId,
-                oldest: sevenDaysAgo,
-            },
-            headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` },
-        });
+    const res = await axios.get("https://slack.com/api/conversations.history", {
+      params: {
+        channel: channelId,
+        oldest: sevenDaysAgo,
+      },
+      headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` },
+    });
 
-        if (!res.data.ok) {
-            console.error(
-                `❌ Failed to fetch messages from ${channelId}: ${res.data.error}`
-            );
-            return [];
-        }
-        return res.data.messages || [];
-    } catch (err) {
-        console.error(`❌ Error fetching messages for ${channelId}:`, err.message);
-        return [];
+    if (!res.data.ok) {
+      console.error(
+        `❌ Failed to fetch messages from ${channelId}: ${res.data.error}`
+      );
+      return [];
     }
+    return res.data.messages || [];
+  } catch (err) {
+    console.error(`❌ Error fetching messages for ${channelId}:`, err.message);
+    return [];
+  }
 }
 
 // Extract readable content from messages
 function extractMessageContent(messages) {
-    let combined = "";
-    messages.forEach((msg, i) => {
-        if (msg.text) {
-            combined += `\nMessage ${i + 1}: ${cleanSlackFormatting(msg.text)}`;
-        }
+  let combined = "";
+  messages.forEach((msg, i) => {
+    if (msg.text) {
+      combined += `\nMessage ${i + 1}: ${cleanSlackFormatting(msg.text)}`;
+    }
 
-        if (msg.attachments) {
-            msg.attachments.forEach((att) => {
-                if (att.title)
-                    combined += `\nAttachment: ${cleanSlackFormatting(att.title)}`;
-                if (att.text)
-                    combined += `\nAttachment text: ${cleanSlackFormatting(att.text)}`;
-                if (att.title_link) combined += `\nLink: ${att.title_link}`;
-            });
-        }
+    if (msg.attachments) {
+      msg.attachments.forEach((att) => {
+        if (att.title)
+          combined += `\nAttachment: ${cleanSlackFormatting(att.title)}`;
+        if (att.text)
+          combined += `\nAttachment text: ${cleanSlackFormatting(att.text)}`;
+        if (att.title_link) combined += `\nLink: ${att.title_link}`;
+      });
+    }
 
-        if (msg.blocks) {
-            msg.blocks.forEach((block) => {
-                if (block.type === "section" && block.text && block.text.text) {
-                    combined += `\nBlock text: ${cleanSlackFormatting(block.text.text)}`;
-                }
-            });
+    if (msg.blocks) {
+      msg.blocks.forEach((block) => {
+        if (block.type === "section" && block.text && block.text.text) {
+          combined += `\nBlock text: ${cleanSlackFormatting(block.text.text)}`;
         }
-    });
-    return combined.trim();
+      });
+    }
+  });
+  return combined.trim();
 }
 
 // Get separate context from channels with specific purposes
 async function getContextFromChannels(channelAId, channelBId, channelCId) {
-    const [messagesA, messagesB, messagesC] = await Promise.all([
-        fetchChannelMessages(channelAId),
-        fetchChannelMessages(channelBId),
-        fetchChannelMessages(channelCId),
-    ]);
+  const [messagesA, messagesB, messagesC] = await Promise.all([
+    fetchChannelMessages(channelAId),
+    fetchChannelMessages(channelBId),
+    fetchChannelMessages(channelCId),
+  ]);
 
-    const contentA = extractMessageContent(messagesA);
-    const contentB = extractMessageContent(messagesB);
-    const contentC = extractMessageContent(messagesC);
+  const contentA = extractMessageContent(messagesA);
+  const contentB = extractMessageContent(messagesB);
+  const contentC = extractMessageContent(messagesC);
 
-    // Check if channel A (reading channel) has any content
-    const hasChannelAContent = messagesA.length > 0 && contentA.trim().length > 0;
+  // Check if channel A (reading channel) has any content
+  const hasChannelAContent = messagesA.length > 0 && contentA.trim().length > 0;
 
-    let contextString = "";
+  let contextString = "";
 
-    if (hasChannelAContent) {
-        contextString += `--- SOURCE_CHANNEL_A (Reading Channel - For Good Read Section Only) ---\n${contentA}\n\n`;
-    } else {
-        contextString += `--- SOURCE_CHANNEL_A (Reading Channel) ---\nNo messages found in the last 7 days. Generate fresh content for Good Read section.\n\n`;
-    }
+  if (hasChannelAContent) {
+    contextString += `--- SOURCE_CHANNEL_A (Reading Channel - For Good Read Section Only) ---\n${contentA}\n\n`;
+  } else {
+    contextString += `--- SOURCE_CHANNEL_A (Reading Channel) ---\nNo messages found in the last 7 days. Generate fresh content for Good Read section.\n\n`;
+  }
 
-    contextString += `--- GENERAL_CHANNEL (For All Other Sections) ---\n${contentB}\n\n`;
+  contextString += `--- GENERAL_CHANNEL (For All Other Sections) ---\n${contentB}\n\n`;
 
-    contextString += `--- SOURCE_CHANNEL_C (Social Media Channel - For In-House Updates Section Only) ---\n${contentC}`;
+  contextString += `--- SOURCE_CHANNEL_C (Social Media Channel - For In-House Updates Section Only) ---\n${contentC}`;
 
-    return contextString;
+  return contextString;
 }
 
 // Get response from Gemini
 async function getAIResponse(prompt) {
-    try {
-        const res = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`, {
-                contents: [{ parts: [{ text: prompt }] }],
-            }, { headers: { "Content-Type": "application/json" } }
-        );
-        return res.data.candidates[0].content.parts[0].text.trim();
-    } catch (error) {
-        if (error.response) {
-            console.error(
-                "❌ Gemini API Error:",
-                error.response.status,
-                error.response.statusText
-            );
-            console.error("Error details:", error.response.data);
-        } else {
-            console.error("❌ Network or other error:", error.message);
-        }
-        return null;
+  try {
+    const res = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+      },
+      { headers: { "Content-Type": "application/json" } }
+    );
+    return res.data.candidates[0].content.parts[0].text.trim();
+  } catch (error) {
+    if (error.response) {
+      console.error(
+        "❌ Gemini API Error:",
+        error.response.status,
+        error.response.statusText
+      );
+      console.error("Error details:", error.response.data);
+    } else {
+      console.error("❌ Network or other error:", error.message);
     }
+    return null;
+  }
 }
 
 // Post message to Slack
 async function postToSlack(message) {
-    try {
-        const response = await axios.post(
-            "https://slack.com/api/chat.postMessage", { channel: SLACK_CHANNEL_ID, text: message }, {
-                headers: {
-                    Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
-                    "Content-Type": "application/json",
-                },
-            }
-        );
+  try {
+    const response = await axios.post(
+      "https://slack.com/api/chat.postMessage",
+      { channel: SLACK_CHANNEL_ID, text: message },
+      {
+        headers: {
+          Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-        if (response.data.ok) {
-            console.log("✅ Message posted to Slack successfully");
-        } else {
-            console.error("❌ Slack API returned an error:", response.data.error);
-        }
-    } catch (error) {
-        if (error.response) {
-            console.error(
-                "❌ Slack API Error:",
-                error.response.status,
-                error.response.statusText
-            );
-            console.error("Error details:", error.response.data);
-        } else {
-            console.error(
-                "❌ Network or other error posting to Slack:",
-                error.message
-            );
-        }
+    if (response.data.ok) {
+      console.log("✅ Message posted to Slack successfully");
+    } else {
+      console.error("❌ Slack API returned an error:", response.data.error);
     }
+  } catch (error) {
+    if (error.response) {
+      console.error(
+        "❌ Slack API Error:",
+        error.response.status,
+        error.response.statusText
+      );
+      console.error("Error details:", error.response.data);
+    } else {
+      console.error(
+        "❌ Network or other error posting to Slack:",
+        error.message
+      );
+    }
+  }
 }
 
 // Main runner
-(async() => {
-    console.log("🤖 Starting Devfolio News Bot...");
+(async () => {
+  console.log("🤖 Starting Devfolio News Bot...");
 
-    // Step 1: Get messages from last 7 days from all three source channels
-    const context = await getContextFromChannels(
-        SOURCE_CHANNEL_A,
-        SOURCE_CHANNEL_B,
-        SOURCE_CHANNEL_C
+  // Step 1: Get messages from last 7 days from all three source channels
+  const context = await getContextFromChannels(
+    SOURCE_CHANNEL_A,
+    SOURCE_CHANNEL_B,
+    SOURCE_CHANNEL_C
+  );
+
+  // Step 2: Append context to prompt
+  const fullPrompt = `${PROMPT}\n${context}`;
+
+  // Step 3: Get AI-generated update
+  const response = await getAIResponse(fullPrompt);
+
+  // Step 4: Post to Slack
+  if (response) {
+    console.log("📝 AI response received, posting to Slack...");
+    await postToSlack(response);
+  } else {
+    console.error(
+      "❌ Failed to get response from Gemini. Bot execution stopped."
     );
-
-    // Step 2: Append context to prompt
-    const fullPrompt = `${PROMPT}\n${context}`;
-
-    // Step 3: Get AI-generated update
-    const response = await getAIResponse(fullPrompt);
-
-    // Step 4: Post to Slack
-    if (response) {
-        console.log("📝 AI response received, posting to Slack...");
-        await postToSlack(response);
-    } else {
-        console.error(
-            "❌ Failed to get response from Gemini. Bot execution stopped."
-        );
-        process.exit(1);
-    }
+    process.exit(1);
+  }
 })();
