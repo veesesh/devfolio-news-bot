@@ -64,7 +64,7 @@ You are the editor of "Devfolio News" — a weekly broadcast to share Devfolio's
 - If none found, leave section blank.
 - Do NOT include any updates from source_channel_A or source_channel_B.
 
-🌐 Good Read:
+📚 Good Read:
 - ONLY use content from the source_channel_A (reading channel) for this section.
 - If source_channel_A has messages from the last 7 days, use those to recommend 1–3 interesting tech-related articles, blog posts, or videos.
 - If source_channel_A has no recent messages, generate fresh recommendations for interesting tech-related articles, blog posts, or videos from the last week.
