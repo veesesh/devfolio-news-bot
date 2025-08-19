@@ -4,14 +4,14 @@ const axios = require("axios");
 // ENV vars
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
 const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const SOURCE_CHANNEL_A = process.env.SOURCE_CHANNEL_A;
 const SOURCE_CHANNEL_B = process.env.SOURCE_CHANNEL_B;
 const SOURCE_CHANNEL_C = process.env.SOURCE_CHANNEL_C;
 
 // Validate environment variables
 [
-  ["GEMINI_API_KEY", GEMINI_API_KEY],
+  ["OPENAI_API_KEY", OPENAI_API_KEY],
   ["SLACK_BOT_TOKEN", SLACK_BOT_TOKEN],
   ["SLACK_CHANNEL_ID", SLACK_CHANNEL_ID],
   ["SOURCE_CHANNEL_A", SOURCE_CHANNEL_A],
@@ -23,7 +23,6 @@ const SOURCE_CHANNEL_C = process.env.SOURCE_CHANNEL_C;
     process.exit(1);
   }
 });
-
 const currentWeek = new Date().toLocaleDateString("en-US", {
   month: "long",
   day: "numeric",
@@ -49,8 +48,12 @@ You are the editor of "Devfolio News" — a weekly broadcast to share Devfolio's
 ⚡ Fresh Drops from the Tech Universe:
 - Summarize 2–3 of the most important global tech news stories from the last 7 days.
 - Search the context in the slack messages if not found, pull fresh.
-- Each item must be in the format: Headline – short one-sentence summary (mention the date of the update in parentheses) – [direct link to the most relevant and recent article].
-- Only include links that match the news and are from credible sources.
+- Each item must be in the format: Headline – short one-sentence summary (mention the date of the update in parentheses) – direct link URL (no markdown formatting).
+- CRITICAL: Only provide links that are real and accessible. Do NOT generate fake or placeholder URLs.
+- Prioritize official sources: company blogs, press releases, official announcements from the organization's website.
+- Use reputable tech news sources: TechCrunch, The Verge, Ars Technica, Wired, official company blogs, GitHub releases, etc.
+- If you cannot find a genuine link for a story, either find a different story with a real link OR omit the link entirely.
+- Verify the URL format is correct (starts with https:// and follows proper URL structure).
 - Separate each story with a blank line.
 - Do NOT repeat the same link twice.
 - Include atleast 4 stories, but if there are not enough in the context, generate fresh ones.
@@ -59,8 +62,8 @@ You are the editor of "Devfolio News" — a weekly broadcast to share Devfolio's
 🏡 In-House Updates:
 - Summarize internal Devfolio updates, product changes, or announcements or EDC updates from the provided Slack messages from source_channel_C (social media channel).
 - Each update: 1–2 sentences.
-- add links found in the message or embeddings of the link. 
-- format: single line - relevant link
+- Add links found in the message or embeddings of the link as direct URLs (no markdown formatting).
+- Format: single line - relevant direct URL
 - If none found, leave section blank.
 - Do NOT include any updates from source_channel_A or source_channel_B.
 
@@ -68,7 +71,11 @@ You are the editor of "Devfolio News" — a weekly broadcast to share Devfolio's
 - ONLY use content from the source_channel_A (reading channel) for this section.
 - If source_channel_A has messages from the last 7 days, use those to recommend 1–3 interesting tech-related articles, blog posts, or videos.
 - If source_channel_A has no recent messages, generate fresh recommendations for interesting tech-related articles, blog posts, or videos from the last week.
-- Include a short hook before each link.
+- Include a short hook before each direct URL link (no markdown formatting).
+- CRITICAL: Only provide genuine, accessible URLs. Verify the link exists and is reachable.
+- Prioritize official sources: company blogs, official documentation, established tech publications.
+- If recommending fresh content, use real articles from: Medium, Dev.to, official tech blogs, GitHub, Stack Overflow blog, etc.
+- Do NOT generate fake URLs or placeholder links.
 - Do NOT use source_channel_A content in any other section.
 - Do NOT include any updates from source_channel_C or source_channel_B.
 
@@ -87,12 +94,24 @@ End the newsletter with sentence "Never stop building!"
 - Source_channel_C (social media channel) content is ONLY for the "In-House Updates" section.
 - All other sections should use content from the general channel or generate fresh content if needed.
 - If some sections are missing info, supplement with relevant, recent public info (last 7 days).
-- Make sure to pull out the actual link related to the respective news from the context. 
+- Make sure to pull out the actual link related to the respective news from the context.
+- IMPORTANT: Always provide links as direct URLs, never use markdown formatting like [text](url).
+- CRITICAL LINK VERIFICATION: Only provide genuine, accessible URLs. Do NOT generate fake, placeholder, or non-existent links.
+- For tech news, prioritize official sources: company press releases, official blogs, GitHub repositories, established tech news sites.
+- If you cannot verify a link exists, either find an alternative genuine link or omit the link entirely.
 - Keep tone friendly and concise.
 - Maintain consistent formatting across all sections — no bullet symbols unless part of a section style.
 - No repeated articles or links in multiple sections.
 - Do not use asterisks.  
 - Do not repeat any subtopic anywhere and do not repeat links in multiple sections.
+
+🔗 LINK QUALITY REQUIREMENTS:
+- Every URL must be genuine and accessible
+- For tech companies: Use official blogs, press releases, or announcements from their main website
+- For startups: Use their official blog, Product Hunt, or TechCrunch coverage
+- For open source: Use GitHub releases, official documentation, or project websites
+- Trusted tech news sources: TechCrunch, The Verge, Ars Technica, Wired, MIT Technology Review
+- If unsure about a link's validity, provide the story without a link rather than a fake URL
 
 ---
 
@@ -195,24 +214,38 @@ async function getContextFromChannels(channelAId, channelBId, channelCId) {
   return contextString;
 }
 
-// Get response from Gemini
+// Get response from OpenAI
 async function getAIResponse(prompt) {
   try {
     const res = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
+      "https://api.openai.com/v1/chat/completions",
       {
-        contents: [{ parts: [{ text: prompt }] }],
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
       },
-      { headers: { "Content-Type": "application/json" } }
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
     );
-    return res.data.candidates[0].content.parts[0].text.trim();
+    return res.data.choices[0].message.content.trim();
   } catch (error) {
     if (error.response) {
       console.error(
-        "❌ Gemini API Error:",
+        "❌ OpenAI API Error:",
         error.response.status,
         error.response.statusText
       );
+      if (error.response.status === 429) {
+        console.error(
+          "Rate limit exceeded. Please wait and try again later, or check your API quota."
+        );
+      } else if (error.response.status === 401) {
+        console.error("Invalid API key. Please check your OPENAI_API_KEY.");
+      }
       console.error("Error details:", error.response.data);
     } else {
       console.error("❌ Network or other error:", error.message);
@@ -280,7 +313,7 @@ async function postToSlack(message) {
     await postToSlack(response);
   } else {
     console.error(
-      "❌ Failed to get response from Gemini. Bot execution stopped."
+      "❌ Failed to get response from OpenAI. Bot execution stopped."
     );
     process.exit(1);
   }

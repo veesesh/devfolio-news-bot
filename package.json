@@ -1,13 +1,22 @@
 {
   "name": "devfolio-news-bot",
   "version": "1.0.0",
-  "description": "",
+  "description": "An intelligent Slack bot that generates weekly newsletters for the Devfolio team using OpenAI",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "slack",
+    "bot",
+    "newsletter",
+    "openai",
+    "devfolio",
+    "automation"
+  ],
+  "author": "Devfolio Team",
   "license": "ISC",
   "dependencies": {
     "@google/genai": "^1.13.0",
