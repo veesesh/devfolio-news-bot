@@ -1,4 +1,4 @@
-# 🤖 Devfolio News Bot
+# 🤖 The Devfolio Buggle 🕸️
 
 An intelligent Slack bot that automatically generates and posts weekly newsletters for the Devfolio team. The bot fetches messages from multiple Slack channels, processes them using OpenAI's GPT-4, and creates a polished weekly update with structured sections.
 
@@ -131,18 +131,6 @@ Then run:
 ```bash
 npm start
 ```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the ISC License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
